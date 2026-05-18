@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Modern Cyber Runner 2026</title>
+    <style>
+        /* ستايل مودرن ومناسب للموبايل */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+        }
+        body {
+            background: #0a0a16;
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #fff;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+        }
+        #gameCanvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+            background: linear-gradient(to bottom, #111c3a, #050510);
+        }
+        /* واجهة النتيجة والـ UI */
+        .ui-container {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            justify-content: space-between;
+            width: 90%;
+            max-width: 400px;
+            z-index: 10;
+        }
+        .score-box {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 10px 20px;
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            font-size: 18px;
+            font-weight: bold;
+            letter-spacing: 1px;
+            box-shadow: 0 4px 15px rgba(0, 242, 254, 0.2);
+        }
+        #score { color: #00f2fe; }
+        #coins { color: #ffd700; }
+        
+        /* شاشة البدء والخسارة */
+        .screen {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(5, 5, 16, 0.85);
+            backdrop-filter: blur(15px);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 20;
+            transition: all 0.3s ease;
+        }
+        .screen.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        h1 {
+            font-size: 32px;
+            margin-bottom: 20px;
+            background: linear-gradient(45deg, #00f2fe, #4facfe);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 30px rgba(0, 242, 254, 0.5);
+        }
+        .btn {
+            background: linear-gradient(45deg, #00f2fe, #4facfe);
+            border: none;
+            padding: 15px 40px;
+            color: #000;
+            font-size: 20px;
+            font-weight: bold;
+            border-radius: 30px;
+            cursor: pointer;
+            box-shadow: 0 5px 20px rgba(0, 242, 254, 0.4);
+            transition: transform 0.1s;
+        }
+        .btn:active {
+            transform: scale(0.95);
+        }
+        /* تلميح للموبايل */
+        .hint {
+            margin-top: 30px;
+            font-size: 14px;
+            color: #888;
+            text-align: center;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="ui-container">
+        <div class="score-box">SCORE: <span id="score">0</span></div>
+        <div class="score-box">🪙 <span id="coins">0</span></div>
+    </div>
+
+    <!-- شاشة البداية -->
+    <div id="startScreen" class="screen">
+        <h1>CYBER RUNNER 2026</h1>
+        <button class="btn" onclick="startGame()">إبدأ اللعب 🏃‍♂️</button>
+        <div class="hint">حرك صباعك يمين وشمال عشان تتفادى العقبات <br> واطلع لفوق عشان تنط! ↕️↔️</div>
+    </div>
+
+    <!-- شاشة الخسارة -->
+    <div id="gameOverScreen" class="screen hidden">
+        <h1 style="background: linear-gradient(45deg, #ff416c, #ff4b2b); -webkit-background-clip: text;">GAME OVER 💥</h1>
+        <p style="margin-bottom: 20px; font-size: 18px;">المجموع اللي جبته: <span id="finalScore" style="color: #00f2fe; font-weight: bold;">0</span></p>
+        <button class="btn" onclick="startGame()">إلعب تاني 🔄</button>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // ضبط مقاسات الشاشة للموبايل
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // متغيرات اللعبة
+        let gameActive = false;
+        let score = 0;
+        let coins = 0;
+        let speed = 8;
+        let player;
+        let lanes = []; // الممرات الثلاثة
+        let obstacles = [];
+        let particles = [];
+        let gameFrame = 0;
+
+        // تحديد الممرات بناءً على عرض الشاشة
+        function updateLanes() {
+            const laneWidth = canvas.width * 0.22;
+            const centerX = canvas.width / 2;
+            lanes = [
+                centerX - laneWidth, // الشمال
+                centerX,             // الوسط
+                centerX + laneWidth  // اليمين
+            ];
+        }
+
+        // كلاس اللاعب
+        class Player {
+            constructor() {
+                this.currentLane = 1; // يبدأ في النص
+                this.x = lanes[this.currentLane];
+                this.y = canvas.height * 0.8;
+                this.targetX = this.x;
+                this.radius = 22;
+                this.jumpY = 0;
+                this.isJumping = false;
+                this.jumpVelocity = 0;
+                this.gravity = 1.2;
+                this.color = '#00f2fe';
+            }
+
+            update() {
+                // حركة ناعمة بين الممرات (Interpolation)
+                this.targetX = lanes[this.currentLane];
+                this.x += (this.targetX - this.x) * 0.25;
+
+                // منطق النط
+                if (this.isJumping) {
+                    this.jumpY += this.jumpVelocity;
+                    this.jumpVelocity += this.gravity;
+                    if (this.jumpY >= 0) {
+                        this.jumpY = 0;
+                        this.isJumping = false;
+                    }
+                }
+            }
+
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y + this.jumpY);
+
+                // تأثير توهج نيون للمودرن ستايل
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = this.color;
+
+                // رسم مجسم اللاعب (سفينة أو ستايل مودرن سبرنت)
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.moveTo(0, -this.radius);
+                ctx.lineTo(-this.radius, this.radius);
+                ctx.lineTo(this.radius, this.radius);
+                ctx.closePath();
+                ctx.fill();
+
+                // تأثير النفاث خلف اللاعب
+                ctx.fillStyle = '#ff4b2b';
+                ctx.beginPath();
+                ctx.arc(0, this.radius + 5 + Math.random()*5, 8, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.restore();
+            }
+        }
+
+        // كلاس العقبات والعملات
+        class Obstacle {
+            constructor() {
+                this.lane = Math.floor(Math.random() * 3);
+                this.x = lanes[this.lane];
+                this.y = -50;
+                this.type = Math.random() > 0.4 ? 'barrier' : 'coin'; // عقبة أو عملة
+                this.w = canvas.width * 0.15;
+                this.h = this.type === 'barrier' ? 40 : 25;
+                this.color = this.type === 'barrier' ? '#ff0055' : '#ffd700';
+            }
+
+            update() {
+                this.y += speed;
+                // تحديث مكان X عشان لو الشاشة لفت
+                this.x = lanes[this.lane];
+            }
+
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = this.color;
+                ctx.fillStyle = this.color;
+
+                if (this.type === 'barrier') {
+                    // حاجز مودرن نيون
+                    ctx.fillRect(-this.w/2, -this.h/2, this.w, this.h);
+                    ctx.strokeStyle = '#fff';
+                    ctx.strokeRect(-this.w/2, -this.h/2, this.w, this.h);
+                } else {
+                    // عملة بتلف
+                    ctx.beginPath();
+                    ctx.arc(0, 0, this.h / 2, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                ctx.restore();
+            }
+        }
+
+        // تشغيل اللعبة
+        function startGame() {
+            document.getElementById('startScreen').classList.add('hidden');
+            document.getElementById('gameOverScreen').classList.add('hidden');
+            updateLanes();
+            player = new Player();
+            obstacles = [];
+            particles = [];
+            score = 0;
+            coins = 0;
+            speed = 8;
+            gameActive = true;
+            animate();
+        }
+
+        // الخسارة
+        function gameOver() {
+            gameActive = false;
+            document.getElementById('finalScore').innerText = score;
+            document.getElementById('gameOverScreen').classList.remove('hidden');
+        }
+
+        // التحكم باللمس (Swipe) للموبايل 📱
+        let touchStartX = 0;
+        let touchStartY = 0;
+
+        window.addEventListener('touchstart', e => {
+            touchStartX = e.touches[0].clientX;
+            touchStartY = e.touches[0].clientY;
+        }, {passive: true});
+
+        window.addEventListener('touchend', e => {
+            if (!gameActive) return;
+            
+            let diffX = e.changedTouches[0].clientX - touchStartX;
+            let diffY = e.changedTouches[0].clientY - touchStartY;
+
+            // تحديد اتجاه السحب
+            if (Math.abs(diffX) > Math.abs(diffY)) {
+                // حركه افقية
+                if (diffX > 40 && player.currentLane < 2) {
+                    player.currentLane++; // يمين
+                } else if (diffX < -40 && player.currentLane > 0) {
+                    player.currentLane--; // شمال
+                }
+            } else {
+                // حركة رأسية
+                if (diffY < -40 && !player.isJumping) {
+                    player.isJumping = true;
+                    player.jumpVelocity = -18; // نط لفوق
+                }
+            }
+        }, {passive: true});
+
+        // التحكم بالكيبورد (عشان لو بتجرب على الكمبيوتر) ⌨️
+        window.addEventListener('keydown', e => {
+            if (!gameActive) return;
+            if (e.key === 'ArrowLeft' && player.currentLane > 0) player.currentLane--;
+            if (e.key === 'ArrowRight' && player.currentLane < 2) player.currentLane++;
+            if ((e.key === 'ArrowUp' || e.key === ' ') && !player.isJumping) {
+                player.isJumping = true;
+                player.jumpVelocity = -18;
+            }
+        });
+
+        // رسم خطوط الطريق السايبر المودرن
+        function drawRoad() {
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+            ctx.lineWidth = 4;
+            
+            // رسم ممرات خطوط نيون متحركة تدي إحساس بالسرعة
+            lanes.forEach(laneX => {
+                ctx.beginPath();
+                ctx.moveTo(laneX, 0);
+                ctx.lineTo(laneX, canvas.height);
+                ctx.stroke();
+            });
+        }
+
+        // اللوب الأساسي للحركة والجرافيكس
+        function animate() {
+            if (!gameActive) return;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // رسم الخلفية والطريق
+            drawRoad();
+
+            // زيادة النتيجة والصعوبة مع الوقت
+            gameFrame++;
+            if (gameFrame % 5 === 0) score++;
+            if (gameFrame % 500 === 0) speed += 0.8; // اللعبة بتسرع
+
+            // إظهار العقبات
+            if (gameFrame % 60 === 0) {
+                obstacles.push(new Obstacle());
+            }
+
+            // تحديث ورسم العقبات
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                let obs = obstacles[i];
+                obs.update();
+                obs.draw();
+
+                // حذف العقبة لو خرجت بره الشاشة
+                if (obs.y > canvas.height + 50) {
+                    obstacles.splice(i, 1);
+                    continue;
+                }
+
+                // كشف التصادم (Collision Detection)
+                let pY = player.y + player.jumpY;
+                let distY = Math.abs(obs.y - pY);
+                
+                if (obs.lane === player.currentLane && distY < (player.radius + obs.h/2)) {
+                    if (obs.type === 'barrier') {
+                        // لو حاجز واللاعب منش؛ يبقى خسر!
+                        if (player.jumpY === 0) { 
+                            gameOver();
+                        }
+                    } else {
+                        // لو عملة؛ ياخدها وتختفي
+                        coins++;
+                        document.getElementById('coins').innerText = coins;
+                        obstacles.splice(i, 1);
+                    }
+                }
+            }
+
+            // تحديث ورسم اللاعب
+            player.update();
+            player.draw();
+
+            // تحديث واجهة المستخدم
+            document.getElementById('score').innerText = score;
+
+            requestAnimationFrame(animate);
+        }
+    </script>
+</body>
+</html>
