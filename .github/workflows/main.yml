@@ -10,61 +10,73 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # سحب ملفات المشروع
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      # تثبيت Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
+      # إنشاء package.json لو مش موجود
       - name: Create package.json
         run: |
           if [ ! -f package.json ]; then
             npm init -y
           fi
 
+      # تثبيت Capacitor
       - name: Install Dependencies
         run: |
           npm install @capacitor/core @capacitor/cli @capacitor/android
 
+      # إنشاء مجلد www
       - name: Create Web Directory
         run: |
           mkdir -p www
           cp index.html www/index.html || true
 
+      # إعداد Java 17
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: zulu
-          java-version: 21
+          java-version: 17
           cache: gradle
 
+      # تهيئة Capacitor
       - name: Initialize Capacitor
         run: |
           npx cap init "My Game" "com.islam.mygame" --web-dir=www
 
+      # إضافة Android
       - name: Add Android Platform
         run: |
           npx cap add android
 
+      # مزامنة الملفات
       - name: Sync Capacitor
         run: |
           npx cap sync android
 
+      # تحديث Gradle
       - name: Update Gradle Wrapper
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew wrapper --gradle-version 8.7
+          ./gradlew wrapper --gradle-version 8.4
 
+      # بناء APK
       - name: Build Debug APK
         run: |
           cd android
           ./gradlew assembleDebug --no-daemon
 
+      # رفع APK
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: android-debug-apk
+          name: app-debug
           path: android/app/build/outputs/apk/debug/app-debug.apk
