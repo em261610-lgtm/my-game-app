@@ -10,80 +10,82 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # تحميل المشروع
-      - name: Checkout Code
+
+      # Checkout
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # Node.js
-      - name: Setup Node
+      # Node 22
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       # Java 17
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
-          distribution: zulu
+          distribution: temurin
           java-version: 17
 
-      # إنشاء package.json
+      # Create package.json
       - name: Create package.json
         run: |
           if [ ! -f package.json ]; then
             npm init -y
           fi
 
-      # تثبيت Capacitor
-      - name: Install Capacitor
+      # Install Capacitor
+      - name: Install Dependencies
         run: |
-          npm install @capacitor/core
-          npm install @capacitor/cli
-          npm install @capacitor/android
+          npm install @capacitor/core@6
+          npm install @capacitor/cli@6
+          npm install @capacitor/android@6
 
-      # إنشاء www
+      # Create WWW
       - name: Create WWW Folder
         run: |
           mkdir -p www
-          cp index.html www/index.html || true
+          cp index.html www/index.html
 
-      # حذف android القديم بالكامل
-      - name: Clean Old Android
+      # Remove old android
+      - name: Remove Android Folder
         run: |
           rm -rf android
 
-      # تهيئة Capacitor
-      - name: Init Capacitor
+      # Init Capacitor
+      - name: Initialize Capacitor
         run: |
-          npx cap init app com.islam.app --web-dir=www
+          npx cap init "MyApp" "com.islam.myapp" --web-dir=www
 
-      # إضافة Android
-      - name: Add Android
+      # Add Android
+      - name: Add Android Platform
         run: |
           npx cap add android
 
-      # تثبيت Gradle ثابت
-      - name: Fix Gradle Version
-        run: |
-          cd android
-          chmod +x gradlew
-
-          sed -i 's/gradle-.*-all.zip/gradle-8.4-all.zip/g' gradle/wrapper/gradle-wrapper.properties
-
       # Sync
-      - name: Capacitor Sync
+      - name: Sync Capacitor
         run: |
           npx cap sync android
 
+      # Fix Gradle
+      - name: Fix Gradle
+        run: |
+          cd android
+
+          chmod +x gradlew
+
+          echo "distributionUrl=https\://services.gradle.org/distributions/gradle-8.4-bin.zip" > gradle/wrapper/gradle-wrapper.properties
+
       # Build APK
-      - name: Build Debug APK
+      - name: Build APK
         run: |
           cd android
           ./gradlew assembleDebug --stacktrace
 
-      # رفع APK
+      # Upload APK
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: apk
+          name: app-debug
           path: android/app/build/outputs/apk/debug/app-debug.apk
