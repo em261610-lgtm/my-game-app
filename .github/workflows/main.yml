@@ -17,35 +17,13 @@ jobs:
           mkdir -p www
           cp index.html www/ || true
 
-      - name: Install Capacitor
-        run: |
-          npm install @capacitor/core @capacitor/cli @capacitor/android
+      - name: Install Dependencies
+        run: npm install
 
-      - name: Setup Java 21
-        uses: actions/setup-java@v4
+      - name: Build Android APK via Capacitor Action
+        uses: richardsand/run-dist-action@v1
         with:
-          distribution: 'zulu'
-          java-version: '21'
-
-      - name: Init Project
-        run: |
-          npx cap init "My Game" "com.islam.mygame" --web-dir=www || true
-
-      - name: Add Android
-        run: |
-          npx cap add android || true
-
-      - name: Sync Capacitor
-        run: |
-          npx cap sync
-
-      - name: Build APK
-        run: |
-          cd android && ./gradlew assembleDebug
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: game-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          platform: android
+          build-cmd: echo "No web build step needed"
+          dist-dir: www
           
