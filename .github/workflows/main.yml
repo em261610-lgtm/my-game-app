@@ -2,7 +2,8 @@ name: Build Android APK
 
 on:
   push:
-    branches: [ "main" ]
+    branches:
+      - main
 
 jobs:
   build:
@@ -12,41 +13,58 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Create Web Dir
-        run: |
-          mkdir -p www
-          cp index.html www/ || true
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
 
-      - name: Install Capacitor
+      - name: Create package.json
+        run: |
+          if [ ! -f package.json ]; then
+            npm init -y
+          fi
+
+      - name: Install Dependencies
         run: |
           npm install @capacitor/core @capacitor/cli @capacitor/android
 
-      - name: Setup Java 21
+      - name: Create Web Directory
+        run: |
+          mkdir -p www
+          cp index.html www/index.html || true
+
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
-          distribution: 'zulu'
-          java-version: '21'
+          distribution: zulu
+          java-version: 21
+          cache: gradle
 
-      - name: Init Project
+      - name: Initialize Capacitor
         run: |
-          npx cap init "My Game" "com.islam.mygame" --web-dir=www || true
+          npx cap init "My Game" "com.islam.mygame" --web-dir=www
 
-      - name: Add Android
+      - name: Add Android Platform
         run: |
-          npx cap add android || true
-
-      - name: Force Gradle Update for Java 21
-        run: |
-          cd android
-          chmod +x gradlew
-          ./gradlew wrapper --gradle-version 8.7 --distribution-type minimal
+          npx cap add android
 
       - name: Sync Capacitor
         run: |
-          npx cap sync
+          npx cap sync android
 
-      - name: Build APK via Gradle
+      - name: Update Gradle Wrapper
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew wrapper --gradle-version 8.7
+
+      - name: Build Debug APK
         run: |
           cd android
           ./gradlew assembleDebug --no-daemon
-          
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
